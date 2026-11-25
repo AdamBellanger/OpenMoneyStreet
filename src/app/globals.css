@@ -1,0 +1,167 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+/* Tokens : mêmes valeurs que src/styles/design-tokens.ts (extraits de Portfolio2026). */
+:root {
+  --background: #121214;
+  --foreground: #edede8;
+  --anthracite: #232326;
+  --muted: #8c8c90;
+  --accent: #7c93b0;
+
+  --status-pas-de-site: #d38e8f;
+  --status-site-casse: #ca976b;
+  --status-site-obsolete: #b4a364;
+  --status-site-ok: #7cb387;
+  --status-non-verifie: #8c8c90;
+
+  --crm-a-contacter: #7c93b0;
+  --crm-maquette-faite: #ab97d1;
+  --crm-visite: #5bb4b8;
+  --crm-signe: #7cb387;
+  --crm-refus: #8c8c90;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.76, 0, 0.24, 1);
+  --shadow-float: 0 30px 60px -20px rgba(0, 0, 0, 0.45);
+
+  color-scheme: dark;
+}
+
+.theme-light {
+  --background: #edede8;
+  --foreground: #161618;
+  --anthracite: #e2e2dc;
+  --muted: #6a6a70;
+  --accent: #4d6788;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-anthracite: var(--anthracite);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --font-display: var(--font-clash-display);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-geist-mono);
+  --ease-signature: var(--ease-out);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/* Curseur personnalisé (pointeur fin uniquement). Le curseur natif revient
+   au-dessus de la carte et des champs de saisie. */
+html.cursor-none,
+html.cursor-none * {
+  cursor: none;
+}
+html.cursor-none [data-native-cursor],
+html.cursor-none [data-native-cursor] *,
+html.cursor-none input,
+html.cursor-none textarea,
+html.cursor-none select {
+  cursor: auto;
+}
+html.cursor-none [data-native-cursor] .leaflet-interactive {
+  cursor: pointer;
+}
+html.cursor-none [data-native-cursor] .leaflet-grab {
+  cursor: grab;
+}
+html.cursor-none [data-native-cursor] .leaflet-dragging .leaflet-grab {
+  cursor: grabbing;
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+
+@keyframes rise {
+  from {
+    transform: translateY(24px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-rise {
+    animation: rise 0.9s var(--ease-out) 0.15s both;
+  }
+}
+
+/* ---- Leaflet, thème sombre ----
+   Le filtre ne touche que le calque des tuiles : les marqueurs (canvas, overlay-pane)
+   gardent leurs couleurs exactes. */
+.leaflet-container {
+  background: var(--background);
+  font-family: var(--font-sans);
+}
+.leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.6);
+}
+.leaflet-control-attribution {
+  background: color-mix(in srgb, var(--anthracite) 85%, transparent) !important;
+  color: var(--muted) !important;
+  border-top-left-radius: 0.5rem;
+  font-size: 11px;
+}
+.leaflet-control-attribution a {
+  color: var(--foreground) !important;
+}
+.leaflet-bar {
+  border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent) !important;
+  border-radius: 9999px !important;
+  overflow: hidden;
+  box-shadow: none !important;
+}
+.leaflet-bar a {
+  background: var(--anthracite) !important;
+  color: var(--foreground) !important;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 10%, transparent) !important;
+  transition: background-color 120ms var(--ease-out);
+}
+.leaflet-bar a:hover {
+  background: color-mix(in srgb, var(--foreground) 12%, var(--anthracite)) !important;
+}
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--anthracite);
+  color: var(--foreground);
+  box-shadow: var(--shadow-float);
+}
+.leaflet-popup-content-wrapper {
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+.leaflet-tooltip {
+  background: var(--anthracite);
+  color: var(--foreground);
+  border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
+  border-radius: 9999px;
+  padding: 2px 10px;
+  box-shadow: none;
+}
+.leaflet-tooltip::before {
+  display: none;
+}
+
+/* Barres de défilement natives mais discrètes (le scroll reste natif). */
+.scroll-thin {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--foreground) 20%, transparent) transparent;
+}
