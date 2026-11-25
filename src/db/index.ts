@@ -16,6 +16,11 @@ function createDb(): Db {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const sqlite = new Database(file);
   sqlite.pragma("journal_mode = WAL");
+  // Arrêt du container (SIGTERM -> process.exit) : fermer la connexion fait un checkpoint
+  // et supprime le WAL, la base reste un fichier unique et cohérent.
+  process.once("exit", () => {
+    if (sqlite.open) sqlite.close();
+  });
   const db = drizzle({ client: sqlite, schema });
   migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
   return db;

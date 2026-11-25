@@ -39,6 +39,8 @@ export function PageTransition({ children }: { children: ReactNode }) {
   const reducedMotion = useReducedMotion();
   const [target, setTarget] = useState<{ href: string; path: string; label: string } | null>(null);
   const busy = useRef(false);
+  /** Clic reçu pendant une transition : joué dès la fin du rideau au lieu d'être perdu. */
+  const pending = useRef<string | null>(null);
 
   const navigate = useCallback<Navigate>(
     (href) => {
@@ -47,7 +49,10 @@ export function PageTransition({ children }: { children: ReactNode }) {
         router.push(url.pathname + url.search);
         return;
       }
-      if (busy.current) return;
+      if (busy.current) {
+        pending.current = url.href;
+        return;
+      }
       busy.current = true;
       setTarget({ href: url.pathname + url.search + url.hash, path: url.pathname, label: LABELS[url.pathname] ?? "" });
     },
@@ -86,6 +91,9 @@ export function PageTransition({ children }: { children: ReactNode }) {
           if (definition === "reveal") {
             busy.current = false;
             setTarget(null);
+            const next = pending.current;
+            pending.current = null;
+            if (next && new URL(next).pathname !== window.location.pathname) navigate(next);
           }
         }}
         className="pointer-events-none fixed inset-0 z-[90] flex items-center justify-center bg-anthracite"

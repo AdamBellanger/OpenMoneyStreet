@@ -1,0 +1,42 @@
+services:
+  prospecteur:
+    build: .
+    image: prospecteur:latest
+    container_name: prospecteur
+    restart: unless-stopped
+    env_file:
+      - .env
+    # Aucun port publié : Nginx Proxy Manager joint le container par son nom
+    # sur le réseau partagé (Forward Hostname: prospecteur, Port: 3000).
+    expose:
+      - "3000"
+    volumes:
+      # Base SQLite (prospects, CRM, cache Overpass) : survit aux rebuilds et redéploiements.
+      - prospecteur-data:/app/data
+    networks:
+      - services_default
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    # Durcissement identique au portfolio : pas d'élévation de privilèges, aucune
+    # capability Linux, mémoire bornée, logs tournants.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  prospecteur-data:
+
+networks:
+  services_default:
+    external: true

@@ -115,6 +115,7 @@ function latestCopyrightYear(html: string): number | null {
 function candidates(raw: string): URL[] {
   const trimmed = raw.trim().split(/\s*;\s*/)[0];
   if (/^https?:\/\//i.test(trimmed)) return [new URL(trimmed)];
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) throw new Error("protocole refusé");
   // Pas de schéma dans le tag OSM : on tente HTTPS puis HTTP.
   return [new URL(`https://${trimmed}`), new URL(`http://${trimmed}`)];
 }
@@ -137,8 +138,9 @@ export async function checkSite(rawUrl: string): Promise<SiteCheckResult> {
   let urls: URL[];
   try {
     urls = candidates(rawUrl);
-  } catch {
-    return { ...base, reasons: ["URL invalide dans OSM"], error: "URL invalide" };
+  } catch (e) {
+    const msg = e instanceof Error && e.message === "protocole refusé" ? "protocole refusé" : "URL invalide";
+    return { ...base, reasons: [`${msg} dans OSM`], error: msg };
   }
 
   if (NOT_A_WEBSITE.test(urls[0].hostname)) {

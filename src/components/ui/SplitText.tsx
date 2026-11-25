@@ -22,7 +22,7 @@ export function SplitText({
 
   return (
     <Tag className={className} aria-label={text}>
-      {text.split(" ").map((word, i) => (
+      {text.split(" ").map((word, i, words) => (
         <span key={i} aria-hidden="true" className="inline-block overflow-hidden pb-[0.12em] align-bottom">
           <motion.span
             className="inline-block"
@@ -30,7 +30,8 @@ export function SplitText({
             animate={{ y: "0%" }}
             transition={{ duration: duration.split, ease: ease.out, delay: delay + i * duration.splitStagger }}
           >
-            {word}{" "}
+            {/* Espace insécable : un espace normal en fin d'inline-block est supprimé au rendu. */}
+            {i < words.length - 1 ? `${word} ` : word}
           </motion.span>
         </span>
       ))}

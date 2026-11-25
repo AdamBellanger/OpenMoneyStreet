@@ -32,18 +32,21 @@ const Row = memo(function Row({
             selected ? "scale-y-100" : "scale-y-0"
           }`}
         />
-        <div className="max-w-[16rem] truncate text-sm">{place.name}</div>
-        <div className="truncate text-xs text-muted">{place.category}</div>
+        <div className="max-w-[20rem] truncate text-sm">{place.name}</div>
+        <div className="max-w-[20rem] truncate text-xs text-muted">
+          {place.category}
+          {place.address ? ` · ${place.address}` : ""}
+        </div>
       </td>
-      <td className="px-3 py-2.5 text-xs text-muted">{place.quartier ?? "—"}</td>
-      <td className="hidden max-w-[14rem] truncate px-3 py-2.5 text-xs text-muted xl:table-cell">{place.address || "—"}</td>
+      <td className="max-w-[10rem] truncate px-3 py-2.5 text-xs text-muted" title={place.quartier ?? undefined}>
+        {place.quartier ?? "—"}
+      </td>
       <td className="px-3 py-2.5">
         <SiteBadge value={place.siteClass} />
       </td>
       <td className="px-3 py-2.5">
         <CrmChip value={place.crm.status} />
       </td>
-      <td className="hidden whitespace-nowrap px-3 py-2.5 font-mono text-xs 2xl:table-cell">{place.phone ?? "—"}</td>
       <td className="whitespace-nowrap px-3 py-2.5 pr-6 font-mono text-xs text-muted sm:pr-10">
         {place.crm.followUp ? new Date(place.crm.followUp).toLocaleDateString("fr-FR") : "—"}
       </td>
@@ -53,8 +56,12 @@ const Row = memo(function Row({
 
 const HEADER_CLASS: Record<string, string> = {
   name: "pl-6 sm:pl-10",
-  address: "hidden xl:table-cell",
-  phone: "hidden 2xl:table-cell",
+  // La catégorie s'affiche sous le nom : la colonne sert au filtre, pas à l'affichage.
+  category: "hidden",
+  // L'adresse s'affiche sous le nom (et reste dans la recherche texte).
+  address: "hidden",
+  // Téléphone : dans le panneau de détail, la recherche texte et le CSV.
+  phone: "hidden",
   followUp: "pr-6 sm:pr-10",
 };
 

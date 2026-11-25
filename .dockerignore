@@ -1,0 +1,16 @@
+node_modules
+.next
+.git
+.gitignore
+.env*
+!.env.example
+npm-debug.log*
+Dockerfile
+docker-compose.yml
+README.md
+*.md
+__pw_*
+# Base SQLite locale : jamais dans l'image.
+data
+*.db
+*.db-*

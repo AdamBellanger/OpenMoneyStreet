@@ -1,6 +1,12 @@
 import "server-only";
 
-export const OVERPASS_URL = process.env.OVERPASS_URL ?? "https://overpass-api.de/api/interpreter";
+/** Instance principale puis miroir de secours (OVERPASS_URL accepte une liste séparée par des virgules). */
+export const OVERPASS_URLS = (
+  process.env.OVERPASS_URL ?? "https://overpass-api.de/api/interpreter,https://overpass.private.coffee/api/interpreter"
+)
+  .split(",")
+  .map((u) => u.trim())
+  .filter(Boolean);
 export const USER_AGENT =
   process.env.PROSPECTEUR_USER_AGENT ?? "Prospecteur/1.0 (contact@adambellanger.pro)";
 
@@ -74,36 +80,51 @@ export class OverpassError extends Error {
   }
 }
 
-async function postQuery(query: string): Promise<OverpassElement[]> {
-  for (let attempt = 0; ; attempt++) {
-    const res = await fetch(OVERPASS_URL, {
-      method: "POST",
-      headers: {
-        "User-Agent": USER_AGENT,
-        "Content-Type": "application/x-www-form-urlencoded",
-        Accept: "application/json",
-      },
-      body: new URLSearchParams({ data: query }),
-      signal: AbortSignal.timeout(200_000),
-    });
-    // Serveur surchargé : une seule nouvelle tentative, après une pause.
-    if ((res.status === 429 || res.status === 504) && attempt === 0) {
-      await new Promise((r) => setTimeout(r, 10_000));
-      continue;
-    }
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new OverpassError(
-        `Overpass a répondu ${res.status}${body ? ` : ${body.slice(0, 200)}` : ""}`,
-        res.status,
-      );
-    }
-    const json = (await res.json()) as { elements?: OverpassElement[]; remark?: string };
-    if (json.remark && /error|timed out|runtime/i.test(json.remark)) {
-      throw new OverpassError(`Overpass : ${json.remark}`);
-    }
-    return json.elements ?? [];
+/** Codes d'un serveur Overpass saturé ou indisponible : on réessaie ailleurs. */
+const RETRYABLE = new Set([429, 502, 503, 504]);
+
+async function postOnce(url: string, query: string): Promise<OverpassElement[]> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "User-Agent": USER_AGENT,
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
+    body: new URLSearchParams({ data: query }),
+    signal: AbortSignal.timeout(250_000),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    const detail = body.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
+    throw new OverpassError(`Overpass a répondu ${res.status}${detail ? ` : ${detail}` : ""}`, res.status);
   }
+  const json = (await res.json()) as { elements?: OverpassElement[]; remark?: string };
+  if (json.remark && /error|timed out|runtime/i.test(json.remark)) {
+    throw new OverpassError(`Overpass : ${json.remark}`, 504);
+  }
+  return json.elements ?? [];
+}
+
+/**
+ * Essaie chaque instance à tour de rôle (2 passes), avec une pause croissante entre
+ * deux essais. Les appels restent séquentiels : jamais deux requêtes Overpass en parallèle.
+ */
+async function postQuery(query: string): Promise<OverpassElement[]> {
+  const plan = [...OVERPASS_URLS, ...OVERPASS_URLS];
+  let lastError: unknown;
+  for (let i = 0; i < plan.length; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, Math.min(5_000 * i, 15_000)));
+    try {
+      return await postOnce(plan[i], query);
+    } catch (e) {
+      lastError = e;
+      const retryable = !(e instanceof OverpassError) || e.status === undefined || RETRYABLE.has(e.status);
+      if (!retryable) throw e;
+      console.warn(`[overpass] ${new URL(plan[i]).host} : ${e instanceof Error ? e.message : e}`);
+    }
+  }
+  throw lastError;
 }
 
 /**
