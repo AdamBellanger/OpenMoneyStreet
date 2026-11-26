@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion, useMotionValue, useReducedMotion, useSpring } from "framer-motion";
-import { spring } from "@/styles/design-tokens";
+import { motion, useMotionValue, useReducedMotion } from "framer-motion";
 
 type Mode = "default" | "link" | "label" | "hidden";
 
@@ -28,8 +27,7 @@ export function CursorFollower() {
 
   const x = useMotionValue(-100);
   const y = useMotionValue(-100);
-  const springX = useSpring(x, spring.cursor);
-  const springY = useSpring(y, spring.cursor);
+  // Pas de ressort (contrairement au portfolio) : le rond suit la souris sans retard, outil de travail oblige.
 
   useEffect(() => {
     if (reducedMotion) return;
@@ -87,7 +85,7 @@ export function CursorFollower() {
   return (
     <motion.div
       aria-hidden="true"
-      style={{ x: springX, y: springY }}
+      style={{ x, y }}
       className={`pointer-events-none fixed left-0 top-0 z-[100] ${isLabel ? "" : "mix-blend-difference"}`}
     >
       <div
