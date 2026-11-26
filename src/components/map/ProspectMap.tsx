@@ -76,7 +76,11 @@ function MarkerLayer({ places, onSelect }: { places: PlaceDTO[]; onSelect: (id: 
       marker.on("click", () => onSelectRef.current(p.id));
       marker.on("mouseover", () => {
         const t = tooltip.current;
-        if (t) map.openTooltip(t.setContent(p.name).setLatLng(marker.getLatLng()));
+        if (!t) return;
+        // Le nom vient d'OSM (modifiable par n'importe qui) : toujours en texte, jamais en HTML.
+        const label = document.createElement("span");
+        label.textContent = p.name;
+        map.openTooltip(t.setContent(label).setLatLng(marker.getLatLng()));
       });
       marker.on("mouseout", () => tooltip.current && map.closeTooltip(tooltip.current));
       g.addLayer(marker);

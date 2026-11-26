@@ -9,7 +9,8 @@
     "lint": "eslint",
     "hash-password": "node scripts/hash-password.mjs",
     "db:generate": "drizzle-kit generate",
-    "check-contrast": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-contrast.mts"
+    "check-contrast": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/check-contrast.mts",
+    "preview": "next build && node scripts/preview.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.108.4",
@@ -20,7 +21,7 @@
     "drizzle-orm": "^0.45.4",
     "framer-motion": "^13.5.1",
     "leaflet": "^1.9.4",
-    "next": "^16.3.6",
+    "next": "^16.4.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-leaflet": "^5.0.0",
@@ -36,7 +37,7 @@
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.11",
     "eslint": "^9",
-    "eslint-config-next": "^16.3.6",
+    "eslint-config-next": "^16.4.6",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

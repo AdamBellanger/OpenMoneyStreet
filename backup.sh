@@ -3,7 +3,7 @@
 # - `sqlite3 .backup` (API de sauvegarde en ligne : cohérent même en écriture, WAL compris),
 #   exécuté DANS le container (l'image embarque le CLI sqlite3) ;
 # - vérification `PRAGMA integrity_check` de la copie ;
-# - copie gzip dans /var/backups/prospecteur, rotation à 14 jours.
+# - copie gzip dans /var/backups/prospecteur (taille contrôlée), rotation à 14 jours.
 #
 # Crontab (root), tous les jours à 3 h 15 :
 #   15 3 * * * /var/www/prospecteur/backup.sh >> /var/log/prospecteur-backup.log 2>&1
@@ -14,7 +14,8 @@ DB="/app/data/prospecteur.db"
 DEST="${BACKUP_DIR:-/var/backups/prospecteur}"
 KEEP_DAYS="${KEEP_DAYS:-14}"
 STAMP=$(date +%Y%m%d-%H%M%S)
-TMP="/tmp/prospecteur-$STAMP.db"
+# Copie temporaire DANS le volume : /tmp est un tmpfs (conteneur en lecture seule).
+TMP="/app/data/.backup-$STAMP.db"
 OUT="$DEST/prospecteur-$STAMP.db.gz"
 
 mkdir -p "$DEST"
@@ -32,7 +33,17 @@ if [ "$check" != "ok" ]; then
   exit 1
 fi
 
-docker cp "$CONTAINER:$TMP" - | tar -xO | gzip -9 > "$OUT.part"
+# Lecture en flux via docker exec (docker cp ne voit pas les tmpfs et dépend du driver).
+docker exec "$CONTAINER" cat "$TMP" | gzip -9 > "$OUT.part"
+
+# Garde-fou : une archive vide ou corrompue ne doit jamais passer pour une sauvegarde.
+size=$(gunzip -c "$OUT.part" | wc -c | tr -d " ")
+expected=$(docker exec "$CONTAINER" stat -c %s "$TMP")
+if [ "$size" -lt 4096 ] || [ "$size" != "$expected" ]; then
+  rm -f "$OUT.part"
+  echo "ERREUR : archive invalide ($size octets, attendu $expected)" >&2
+  exit 1
+fi
 mv "$OUT.part" "$OUT"
 chmod 600 "$OUT"
 echo "[$(date -Is)] OK : $OUT ($(du -h "$OUT" | cut -f1))"

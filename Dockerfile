@@ -38,17 +38,18 @@ RUN apk add --no-cache sqlite \
  && addgroup -S nodejs -g 1001 && adduser -S nextjs -u 1001 -G nodejs \
  && mkdir -p /app/data && chown nextjs:nodejs /app/data
 
-COPY --from=build --chown=nextjs:nodejs /app/public ./public
-COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Le code appartient à root (lecture seule pour l'application) : seul /app/data est inscriptible.
+COPY --from=build /app/public ./public
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
 # Migrations Drizzle, appliquées au démarrage par src/instrumentation.ts.
-COPY --from=build --chown=nextjs:nodejs /app/drizzle ./drizzle
+COPY --from=build /app/drizzle ./drizzle
 # Générateur de hash du mot de passe. Turbopack embarque bcryptjs dans les chunks serveur :
 # le script autonome a besoin de sa propre copie (pur JS, quelques Ko).
-COPY --from=build --chown=nextjs:nodejs /app/scripts/hash-password.mjs ./scripts/hash-password.mjs
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/bcryptjs ./node_modules/bcryptjs
+COPY --from=build /app/scripts/hash-password.mjs ./scripts/hash-password.mjs
+COPY --from=deps /app/node_modules/bcryptjs ./node_modules/bcryptjs
 # Module natif compilé dans l'étape deps (le traçage standalone ne suit pas toujours les .node).
-COPY --from=deps --chown=nextjs:nodejs /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
+COPY --from=deps /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
 
 USER nextjs
 EXPOSE 3000

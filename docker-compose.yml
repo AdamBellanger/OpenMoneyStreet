@@ -28,6 +28,12 @@ services:
     cap_drop:
       - ALL
     mem_limit: 512m
+    pids_limit: 200
+    # Système de fichiers en lecture seule : seuls le volume /app/data et /tmp (en mémoire,
+    # utilisé par backup.sh) sont inscriptibles.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
     logging:
       driver: json-file
       options:

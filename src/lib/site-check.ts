@@ -1,5 +1,7 @@
 import "server-only";
-import { lookup } from "node:dns/promises";
+import dns from "node:dns";
+import http from "node:http";
+import https from "node:https";
 import net from "node:net";
 import type { SiteClass } from "./domain";
 import { USER_AGENT } from "./overpass";
@@ -28,73 +30,148 @@ export interface SiteCheckResult {
   error: string | null;
 }
 
-function isPrivateIp(ip: string): boolean {
-  if (net.isIPv4(ip)) {
-    const [a, b] = ip.split(".").map(Number);
-    return (
-      a === 0 ||
-      a === 10 ||
-      a === 127 ||
-      (a === 100 && b >= 64 && b <= 127) ||
-      (a === 169 && b === 254) ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      a >= 224
-    );
-  }
-  const v6 = ip.toLowerCase();
-  if (v6.startsWith("::ffff:")) return isPrivateIp(v6.slice(7));
-  return v6 === "::" || v6 === "::1" || v6.startsWith("fc") || v6.startsWith("fd") || v6.startsWith("fe80");
+/** Plages jamais joignables depuis la vérification de sites (réseaux internes, réservés, multicast). */
+const BLOCKED = new net.BlockList();
+for (const [addr, prefix] of [
+  ["0.0.0.0", 8],
+  ["10.0.0.0", 8],
+  ["100.64.0.0", 10],
+  ["127.0.0.0", 8],
+  ["169.254.0.0", 16],
+  ["172.16.0.0", 12],
+  ["192.0.0.0", 24],
+  ["192.0.2.0", 24],
+  ["192.168.0.0", 16],
+  ["198.18.0.0", 15],
+  ["198.51.100.0", 24],
+  ["203.0.113.0", 24],
+  ["224.0.0.0", 4],
+  ["240.0.0.0", 4],
+] as const) {
+  BLOCKED.addSubnet(addr, prefix, "ipv4");
+}
+for (const [addr, prefix] of [
+  ["::", 127], // :: et ::1
+  ["fc00::", 7], // ULA
+  ["fe80::", 10], // lien local
+  ["ff00::", 8], // multicast
+  ["64:ff9b::", 96], // NAT64 : peut pointer vers une IPv4 interne
+  ["2002::", 16], // 6to4 : idem
+  ["2001:db8::", 32], // documentation
+] as const) {
+  BLOCKED.addSubnet(addr, prefix, "ipv6");
 }
 
-/** Refuse les adresses internes (garde SSRF) : à vérifier à chaque saut de redirection. */
-async function assertPublicHost(url: URL): Promise<void> {
+function isBlockedIp(ip: string): boolean {
+  const mapped = ip.toLowerCase().match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (mapped) return BLOCKED.check(mapped[1], "ipv4");
+  if (net.isIPv4(ip)) return BLOCKED.check(ip, "ipv4");
+  if (net.isIPv6(ip)) return BLOCKED.check(ip, "ipv6");
+  return true;
+}
+
+/**
+ * Résolution DNS utilisée PAR la connexion elle-même : l'adresse contrôlée est exactement
+ * celle à laquelle on se connecte. Un contrôle fait avant `fetch` laissait une fenêtre de
+ * DNS rebinding (le domaine répond une IP publique au contrôle, 127.0.0.1 à la connexion).
+ */
+const safeLookup: net.LookupFunction = (hostname, options, callback) => {
+  dns.lookup(hostname, { ...options, all: true }, (err, addresses) => {
+    if (err) return callback(err, "", 4);
+    const list = addresses as unknown as dns.LookupAddress[];
+    if (list.length === 0 || list.some((a) => isBlockedIp(a.address))) {
+      return callback(new Error("adresse IP privée refusée"), "", 4);
+    }
+    if (options.all) (callback as unknown as (e: null, a: dns.LookupAddress[]) => void)(null, list);
+    else callback(null, list[0].address, list[0].family);
+  });
+};
+
+/** Contrôles statiques de l'URL (le contrôle d'IP, lui, a lieu à la connexion). */
+function assertAllowedUrl(url: URL): void {
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error(`protocole ${url.protocol} refusé`);
   if (url.port && !["80", "443", "8080", "8443"].includes(url.port)) throw new Error(`port ${url.port} refusé`);
+  if (url.username || url.password) throw new Error("identifiants dans l'URL refusés");
   const host = url.hostname.replace(/^\[|\]$/g, "");
-  if (host === "localhost" || host.endsWith(".local") || host.endsWith(".internal")) {
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) {
     throw new Error("hôte interne refusé");
   }
-  const addresses = net.isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
-  if (addresses.length === 0 || addresses.some((a) => isPrivateIp(a.address))) {
-    throw new Error("adresse IP privée refusée");
-  }
+  // IP écrite en dur : Node ne passe pas par `lookup`, on la contrôle ici.
+  if (net.isIP(host) && isBlockedIp(host)) throw new Error("adresse IP privée refusée");
 }
 
-async function readCapped(res: Response): Promise<string> {
-  if (!res.body) return "";
-  const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  while (total < MAX_BYTES) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    total += value.byteLength;
-  }
-  await reader.cancel().catch(() => undefined);
-  return new TextDecoder("utf-8", { fatal: false }).decode(Buffer.concat(chunks).subarray(0, MAX_BYTES));
+interface RawResponse {
+  status: number;
+  location: string | null;
+  lastModified: string | null;
+  body: string;
+}
+
+function requestOnce(url: URL, signal: AbortSignal): Promise<RawResponse> {
+  return new Promise((resolve, reject) => {
+    const client = url.protocol === "https:" ? https : http;
+    const req = client.request(
+      url,
+      {
+        method: "GET",
+        lookup: safeLookup,
+        signal,
+        headers: {
+          "User-Agent": USER_AGENT,
+          Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
+          "Accept-Language": "fr-FR,fr;q=0.9",
+          "Accept-Encoding": "identity",
+        },
+      },
+      (res) => {
+        const status = res.statusCode ?? 0;
+        const header = (name: string) => {
+          const v = res.headers[name];
+          return Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
+        };
+        const base = { status, location: header("location"), lastModified: header("last-modified") };
+        const isHtml = String(res.headers["content-type"] ?? "").includes("html");
+        if ((status >= 300 && status < 400) || !isHtml) {
+          res.resume();
+          resolve({ ...base, body: "" });
+          return;
+        }
+        // Lecture plafonnée : une page énorme n'occupe pas la mémoire.
+        const chunks: Buffer[] = [];
+        let total = 0;
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          resolve({ ...base, body: Buffer.concat(chunks).subarray(0, MAX_BYTES).toString("utf8") });
+        };
+        res.on("data", (chunk: Buffer) => {
+          chunks.push(chunk);
+          total += chunk.length;
+          if (total >= MAX_BYTES) {
+            finish();
+            res.destroy();
+          }
+        });
+        res.on("end", finish);
+        res.on("close", finish);
+        res.on("error", (e) => (settled ? undefined : reject(e)));
+      },
+    );
+    req.on("error", reject);
+    req.end();
+  });
 }
 
 /** Suit les redirections à la main pour contrôler chaque destination. */
-async function fetchFollowing(start: URL, signal: AbortSignal): Promise<{ res: Response; url: URL }> {
+async function fetchFollowing(start: URL, signal: AbortSignal): Promise<{ res: RawResponse; url: URL }> {
   let url = start;
   for (let hop = 0; ; hop++) {
-    await assertPublicHost(url);
-    const res = await fetch(url, {
-      redirect: "manual",
-      signal,
-      headers: {
-        "User-Agent": USER_AGENT,
-        Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
-        "Accept-Language": "fr-FR,fr;q=0.9",
-      },
-    });
-    const location = res.headers.get("location");
-    if (res.status >= 300 && res.status < 400 && location) {
+    assertAllowedUrl(url);
+    const res = await requestOnce(url, signal);
+    if (res.status >= 300 && res.status < 400 && res.location) {
       if (hop >= MAX_REDIRECTS) throw new Error("trop de redirections");
-      await res.body?.cancel().catch(() => undefined);
-      url = new URL(location, url);
+      url = new URL(res.location, url);
       continue;
     }
     return { res, url };
@@ -157,7 +234,7 @@ export async function checkSite(rawUrl: string): Promise<SiteCheckResult> {
   for (const start of urls) {
     try {
       const { res, url } = await fetchFollowing(start, signal);
-      const html = (res.headers.get("content-type") ?? "").includes("html") || res.ok ? await readCapped(res) : "";
+      const html = res.body;
       const result: SiteCheckResult = {
         ...base,
         finalUrl: url.href,
@@ -165,12 +242,12 @@ export async function checkSite(rawUrl: string): Promise<SiteCheckResult> {
         reachable: true,
         https: url.protocol === "https:",
         hasViewport: /<meta[^>]+name\s*=\s*["']?viewport/i.test(html),
-        lastModified: res.headers.get("last-modified"),
+        lastModified: res.lastModified,
         copyrightYear: latestCopyrightYear(html),
       };
       return classify(result);
     } catch (e) {
-      lastError = e instanceof Error ? (e.name === "TimeoutError" ? "délai de 8 s dépassé" : e.message) : String(e);
+      lastError = e instanceof Error ? (e.name === "TimeoutError" || e.name === "AbortError" ? "délai de 8 s dépassé" : e.message) : String(e);
       if (signal.aborted) break;
       // Erreur TLS sur https:// sans schéma d'origine : on retente en http://.
     }

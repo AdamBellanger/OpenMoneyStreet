@@ -12,9 +12,12 @@ export const MAX_GLOBAL = 30;
 
 /** IP du client : NPM est le seul à pouvoir joindre le container et pose ces en-têtes. */
 export function clientIp(headers: Headers): string {
+  // X-Real-IP est écrasé par NPM. Pour X-Forwarded-For, seule la DERNIÈRE entrée (ajoutée par
+  // le proxy) est fiable : la première est fournie par le client, qui pourrait changer d'IP à
+  // chaque tentative pour échapper à la limite.
   return (
     headers.get("x-real-ip")?.trim() ||
-    headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() ||
     "unknown"
   );
 }

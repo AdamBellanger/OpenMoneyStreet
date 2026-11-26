@@ -21,7 +21,13 @@ Stack : Next.js 16 (App Router, sortie standalone), React 19, TypeScript, Tailwi
 npm install
 cp .env.example .env.local      # puis remplir les 3 variables d'authentification
 npm run hash-password           # copie la ligne AUTH_PASSWORD_HASH_B64=… dans .env.local
-npm run dev                     # http://localhost:3000
+npm run dev                     # http://localhost:3000 (développement)
+```
+
+Pour **travailler** avec l'outil au quotidien, utiliser la version optimisée : le serveur de dev compile chaque page à la volée et reste lent par nature.
+
+```bash
+npm run preview                 # build + serveur de prod sur http://localhost:3000, même base
 ```
 
 La base est créée dans `data/prospecteur.db` et migrée au démarrage. Après une modification de [src/db/schema.ts](src/db/schema.ts), lancer `npm run db:generate` et commiter le dossier `drizzle/`.
@@ -151,5 +157,8 @@ cd /var/www/prospecteur && git pull && ./deploy.sh
   - limite de 5 échecs par IP sur 15 min et 30 au total, stockée en SQLite ;
   - temps de réponse constant en cas d'échec.
 - **En plus** : Access List NPM, CSP à nonce, en-têtes de sécurité, requêtes de modification refusées si l'origine diffère, `noindex`.
-- **Container** : utilisateur non-root (uid 1001), `cap_drop: ALL`, `no-new-privileges`, 512 Mo de mémoire, aucun port publié.
-- **Vérification des sites** : les adresses privées, loopback et link-local sont refusées à chaque redirection (garde SSRF).
+- **Container** : utilisateur non-root (uid 1001), code appartenant à root, système de fichiers en lecture seule (`read_only`, seuls `/app/data` et un `/tmp` en mémoire sont inscriptibles), `cap_drop: ALL`, `no-new-privileges`, 512 Mo et 200 processus maximum, aucun port publié.
+- **Cookie** : préfixe `__Host-` en production (refusé par le navigateur s'il n'est pas Secure, sur `/`, sans domaine).
+- **Données OSM** : noms et adresses toujours affichés comme du texte, jamais interprétés en HTML.
+- **Vérification des sites** : les adresses privées, réservées, NAT64/6to4 et loopback sont refusées **au moment de la connexion** (résolution DNS contrôlée, donc pas de DNS rebinding), à chaque redirection ; identifiants dans l'URL et ports exotiques refusés.
+- **Dépendances** : `npm audit --omit=dev` à 0 vulnérabilité (Next 16.4.6). Relancer après chaque mise à jour.

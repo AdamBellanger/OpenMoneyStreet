@@ -5,7 +5,12 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * Un seul utilisateur, donc rien à stocker côté serveur ; changer SESSION_SECRET
  * déconnecte toutes les sessions.
  */
-export const SESSION_COOKIE = "prospecteur_session";
+const SECURE = process.env.NODE_ENV !== "development";
+/**
+ * En prod, préfixe `__Host-` : le navigateur refuse ce cookie s'il n'est pas Secure, posé sur
+ * « / » et sans Domain. Un sous-domaine compromis ne peut donc ni le lire ni l'écraser.
+ */
+export const SESSION_COOKIE = SECURE ? "__Host-prospecteur_session" : "prospecteur_session";
 export const SESSION_TTL_S = 7 * 24 * 60 * 60;
 
 interface SessionPayload {
@@ -54,7 +59,7 @@ export function sessionCookieOptions(maxAge = SESSION_TTL_S) {
   return {
     httpOnly: true,
     // En dev on reste sur http://localhost ; en prod NPM sert tout en HTTPS.
-    secure: process.env.NODE_ENV !== "development",
+    secure: SECURE,
     sameSite: "strict" as const,
     path: "/",
     maxAge,

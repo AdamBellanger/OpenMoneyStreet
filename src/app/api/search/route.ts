@@ -17,7 +17,9 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 export async function GET(req: NextRequest) {
   const city = req.nextUrl.searchParams.get("city")?.trim();
   const refresh = req.nextUrl.searchParams.get("refresh") === "1";
-  if (!city || city.length > 100) {
+  // Lettres, espaces, tirets, apostrophes et points seulement (Saint-Étienne, L'Haÿ-les-Roses…) :
+  // rien d'autre n'a à entrer dans la requête Overpass.
+  if (!city || city.length > 100 || !/^[\p{L}\p{M}][\p{L}\p{M}\p{N} '’.\-]*$/u.test(city)) {
     return NextResponse.json({ error: "Paramètre city manquant ou invalide" }, { status: 400 });
   }
   const cityKey = normalizeCityKey(city);
