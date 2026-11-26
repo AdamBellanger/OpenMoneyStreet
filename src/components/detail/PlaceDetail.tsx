@@ -11,6 +11,7 @@ import {
   type CrmStatus,
   type PlaceDTO,
 } from "@/lib/domain";
+import { MoneyInput } from "@/components/dashboard/Clients";
 import { SiteBadge } from "@/components/ui/Status";
 import { transitions } from "@/styles/design-tokens";
 
@@ -92,7 +93,7 @@ export function PlaceDetail({
       transition={transitions.ui}
       aria-label={`Fiche ${place.name}`}
       style={{ boxShadow: "var(--shadow-float)" }}
-      className="scroll-thin absolute inset-y-3 right-3 z-[500] w-[min(26rem,calc(100%-1.5rem))] overflow-y-auto rounded-2xl border border-foreground/10 bg-anthracite/95 p-6 backdrop-blur"
+      className="scroll-thin fixed inset-x-2 bottom-2 top-20 z-30 overflow-y-auto rounded-2xl border border-foreground/10 bg-anthracite/95 p-5 backdrop-blur sm:p-6 lg:inset-x-auto lg:bottom-3 lg:right-3 lg:top-[84px] lg:w-[26rem]"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
@@ -222,6 +223,29 @@ export function PlaceDetail({
           Enregistré
         </p>
         {crm.isError && <p className="text-xs text-[var(--status-pas-de-site)]">{(crm.error as Error).message}</p>}
+      </Section>
+
+      <Section title={place.crm.status === "signe" ? "Facturation" : "Devis"}>
+        <div className="flex flex-wrap items-center gap-2">
+          <MoneyInput label="Prix du site" value={place.crm.amount} onCommit={(v) => crm.mutate({ amount: v })} />
+          {place.crm.status === "signe" && (
+            <MoneyInput label="Abonnement mensuel" suffix="€/mois" value={place.crm.monthly} onCommit={(v) => crm.mutate({ monthly: v })} />
+          )}
+        </div>
+        {place.crm.status === "signe" && (
+          <label className="mt-4 block">
+            <span className={EYEBROW}>Signé le</span>
+            <input
+              type="date"
+              value={place.crm.signedOn ?? ""}
+              onChange={(e) => crm.mutate({ signedOn: e.target.value || null })}
+              className="mt-2 h-9 rounded-full border border-foreground/15 bg-background px-3 text-xs outline-none focus:border-accent"
+            />
+          </label>
+        )}
+        <p className="mt-3 text-[11px] text-muted">
+          {place.crm.status === "signe" ? "Compté dans le chiffre d'affaires du tableau de bord." : "Compté dans les devis en cours une fois « Maquette faite » ou « Visité »."}
+        </p>
       </Section>
 
       <Section title="Actions">

@@ -1,6 +1,6 @@
 "use client";
 
-import type { CrmStatus, FollowUpDTO, PlaceDTO, SearchResponse } from "./domain";
+import type { CrmStatus, DashboardDTO, FollowUpDTO, PlaceDTO, SearchResponse } from "./domain";
 import { placeSlug } from "./domain";
 
 export class ApiError extends Error {
@@ -35,7 +35,18 @@ export const fetchSearch = (city: string, refresh = false) =>
 
 export const checkSite = (id: string) => api<PlaceDTO>("/api/check-site", { method: "POST", body: JSON.stringify({ id }) });
 
-export const updateCrm = (id: string, patch: { status?: CrmStatus; notes?: string; followUp?: string | null }) =>
+export interface CrmPatch {
+  status?: CrmStatus;
+  notes?: string;
+  followUp?: string | null;
+  amount?: number | null;
+  monthly?: number | null;
+  signedOn?: string | null;
+}
+
+export const fetchDashboard = () => api<DashboardDTO>("/api/dashboard");
+
+export const updateCrm = (id: string, patch: CrmPatch) =>
   api<PlaceDTO>(`/api/places/${placeSlug(id)}/crm`, { method: "PATCH", body: JSON.stringify(patch) });
 
 export const fetchFollowUps = () => api<{ date: string; places: FollowUpDTO[] }>("/api/relances");

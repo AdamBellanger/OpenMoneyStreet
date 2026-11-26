@@ -24,7 +24,7 @@ const Row = memo(function Row({
         selected ? "bg-accent/15" : "hover:bg-foreground/5"
       }`}
     >
-      <td className="relative py-2.5 pl-6 pr-3 sm:pl-10">
+      <td className="relative py-2.5 pl-4 pr-3 sm:pl-10">
         {/* Barre d'accent de la ligne sélectionnée */}
         <span
           aria-hidden
@@ -32,13 +32,14 @@ const Row = memo(function Row({
             selected ? "scale-y-100" : "scale-y-0"
           }`}
         />
-        <div className="max-w-[20rem] truncate text-sm">{place.name}</div>
-        <div className="max-w-[20rem] truncate text-xs text-muted">
+        <div className="max-w-[7.5rem] truncate text-sm sm:max-w-[20rem]">{place.name}</div>
+        <div className="max-w-[7.5rem] truncate text-xs text-muted sm:max-w-[20rem]">
           {place.category}
           {place.address ? ` · ${place.address}` : ""}
+          <span className="2xl:hidden">{place.quartier ? ` · ${place.quartier}` : ""}</span>
         </div>
       </td>
-      <td className="max-w-[10rem] truncate px-3 py-2.5 text-xs text-muted" title={place.quartier ?? undefined}>
+      <td className="hidden max-w-[10rem] truncate px-3 py-2.5 text-xs text-muted 2xl:table-cell" title={place.quartier ?? undefined}>
         {place.quartier ?? "—"}
       </td>
       <td className="px-3 py-2.5">
@@ -47,7 +48,7 @@ const Row = memo(function Row({
       <td className="px-3 py-2.5">
         <CrmChip value={place.crm.status} />
       </td>
-      <td className="whitespace-nowrap px-3 py-2.5 pr-6 font-mono text-xs text-muted sm:pr-10">
+      <td className="hidden whitespace-nowrap px-3 py-2.5 pr-6 font-mono text-xs text-muted sm:pr-10 md:table-cell">
         {place.crm.followUp ? new Date(place.crm.followUp).toLocaleDateString("fr-FR") : "—"}
       </td>
     </tr>
@@ -55,14 +56,15 @@ const Row = memo(function Row({
 });
 
 const HEADER_CLASS: Record<string, string> = {
-  name: "pl-6 sm:pl-10",
+  name: "pl-4 sm:pl-10",
   // La catégorie s'affiche sous le nom : la colonne sert au filtre, pas à l'affichage.
   category: "hidden",
+  quartier: "hidden 2xl:table-cell",
   // L'adresse s'affiche sous le nom (et reste dans la recherche texte).
   address: "hidden",
   // Téléphone : dans le panneau de détail, la recherche texte et le CSV.
   phone: "hidden",
-  followUp: "pr-6 sm:pr-10",
+  followUp: "hidden pr-6 sm:pr-10 md:table-cell",
 };
 
 export function ProspectTable({

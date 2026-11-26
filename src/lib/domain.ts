@@ -52,6 +52,9 @@ export interface CrmDTO {
   status: CrmStatus;
   notes: string;
   followUp: string | null;
+  amount: number | null;
+  monthly: number | null;
+  signedOn: string | null;
   updatedAt: number | null;
 }
 
@@ -235,4 +238,41 @@ export function todayParis(): string {
 
 export interface FollowUpDTO extends PlaceDTO {
   cityName: string;
+}
+
+export const formatEur = (n: number) =>
+  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+
+export interface MonthPoint {
+  /** AAAA-MM */
+  month: string;
+  /** Sites vendus ce mois-là (€) */
+  oneOff: number;
+  /** Nouveaux clients ce mois-là */
+  clients: number;
+}
+
+export interface DashboardDTO {
+  today: string;
+  places: number;
+  withoutSite: number;
+  cities: { name: string; places: number }[];
+  /** Nombre de fiches par statut CRM (une fiche existe dès qu'on a touché à un commerce). */
+  funnel: Record<CrmStatus, number>;
+  clients: number;
+  /** Somme des prix des sites vendus */
+  oneOff: number;
+  /** Somme des abonnements mensuels des clients signés */
+  mrr: number;
+  /** Abonnements déjà courus depuis la signature (mensualité x mois écoulés) */
+  recurringEarned: number;
+  /** Devis en cours : maquette faite + visité */
+  pipelineCount: number;
+  pipelineValue: number;
+  /** signés / (signés + refus) */
+  winRate: number | null;
+  months: MonthPoint[];
+  signedClients: FollowUpDTO[];
+  pipeline: FollowUpDTO[];
+  followUpsDue: number;
 }

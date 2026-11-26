@@ -10,8 +10,10 @@ import { logout } from "@/lib/api-client";
 import { ease } from "@/styles/design-tokens";
 
 const LINKS = [
-  { href: "/", label: "Carte" },
-  { href: "/relances", label: "Relances du jour" },
+  { href: "/", label: "Tableau de bord" },
+  { href: "/prospection", label: "Prospection" },
+  { href: "/clients", label: "Clients" },
+  { href: "/relances", label: "Relances" },
 ];
 
 /**
@@ -62,15 +64,17 @@ export function AppHeader({ children }: { children?: ReactNode }) {
 
   return (
     <>
-      <header className="relative z-30 flex items-center gap-6 border-b border-foreground/10 px-6 py-3 sm:px-10">
+      <header className="relative z-30 flex items-center gap-3 border-b border-foreground/10 px-4 py-3 sm:gap-6 sm:px-10">
         <Link href="/" className="shrink-0 font-display text-sm tracking-wide">
-          © Made by Adam Bellanger
-          <span className="text-muted"> / Prospecteur</span>
+          <span className="hidden md:inline">
+            © Made by Adam Bellanger <span className="text-muted">/ </span>
+          </span>
+          <span className="md:text-muted">Prospecteur</span>
         </Link>
 
         <div className="flex min-w-0 flex-1 items-center gap-4">{children}</div>
 
-        <nav aria-label="Navigation principale" className="hidden items-center gap-8 lg:flex">
+        <nav aria-label="Navigation principale" className="hidden shrink-0 items-center gap-7 xl:flex">
           {LINKS.map((link) => {
             const active = pathname === link.href;
             return (

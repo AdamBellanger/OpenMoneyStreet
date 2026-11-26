@@ -3,7 +3,7 @@
 import { AnimatePresence } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { PlaceDetail } from "@/components/detail/PlaceDetail";
 import { MapPanel } from "@/components/map/MapPanel";
@@ -12,7 +12,7 @@ import { Toolbar } from "@/components/table/Toolbar";
 import { EMPTY_FILTERS, useProspectTable, type Filters } from "@/components/table/useProspectTable";
 import { checkSite, fetchSearch, searchKey } from "@/lib/api-client";
 import { downloadText, placesToCsv } from "@/lib/csv";
-import type { PlaceDTO, SearchResponse } from "@/lib/domain";
+import { placeIdFromSlug, type PlaceDTO, type SearchResponse } from "@/lib/domain";
 
 const LAST_CITY = "prospecteur:lastCity";
 const BATCH_CONCURRENCY = 4;
@@ -35,7 +35,18 @@ export function ProspectorApp() {
   const city = params.get("city") ?? "";
   const [input, setInput] = useState(city);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
-  const [selectedId, setSelectedId] = useState<string | null>(params.get("place"));
+  const placeParam = params.get("place");
+  const [selectedId, setSelectedId] = useState<string | null>(placeParam ? placeIdFromSlug(placeParam) : null);
+  const [view, setView] = useState<"liste" | "carte">("liste");
+  const isDesktop = useSyncExternalStore(
+    (cb) => {
+      const mq = window.matchMedia("(min-width: 1024px)");
+      mq.addEventListener("change", cb);
+      return () => mq.removeEventListener("change", cb);
+    },
+    () => window.matchMedia("(min-width: 1024px)").matches,
+    () => true,
+  );
   const [refreshing, setRefreshing] = useState(false);
   const [batch, setBatch] = useState<{ done: number; total: number } | null>(null);
   const stopBatch = useRef(false);
@@ -80,6 +91,7 @@ export function ProspectorApp() {
         old ? { ...old, places: old.places.map((x) => (x.id === p.id ? p : x)) } : old,
       );
       queryClient.invalidateQueries({ queryKey: ["relances"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
     [city, queryClient],
   );
@@ -129,20 +141,20 @@ export function ProspectorApp() {
   return (
     <div className="flex h-screen flex-col">
       <AppHeader>
-        <form onSubmit={onSearch} className="flex items-center gap-2">
+        <form onSubmit={onSearch} className="flex min-w-0 flex-1 items-center gap-2 sm:flex-none">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ville (ex. Rouen)"
             aria-label="Ville"
-            className="h-10 w-48 rounded-full border border-foreground/15 bg-background px-4 text-sm outline-none transition-colors duration-150 placeholder:text-muted focus:border-accent"
+            className="h-10 w-full min-w-0 rounded-full sm:w-48 border border-foreground/15 bg-background px-4 text-sm outline-none transition-colors duration-150 placeholder:text-muted focus:border-accent"
           />
-          <button type="submit" className="h-10 rounded-full bg-accent px-5 text-sm text-background transition-opacity duration-150 hover:opacity-90">
+          <button type="submit" className="h-10 shrink-0 rounded-full bg-accent px-4 sm:px-5 text-sm text-background transition-opacity duration-150 hover:opacity-90">
             Chercher
           </button>
         </form>
         {search.data && (
-          <p className="hidden items-center gap-3 truncate font-mono text-[11px] uppercase tracking-widest text-muted md:flex">
+          <p className="hidden items-center gap-3 truncate font-mono text-[11px] uppercase tracking-widest text-muted 2xl:flex">
             <span>{search.data.places.length} commerces</span>
             <span aria-hidden>·</span>
             <span>OSM {ago(search.data.fetchedAt)}</span>
@@ -170,8 +182,25 @@ export function ProspectorApp() {
           <p className="max-w-lg text-sm text-[var(--status-pas-de-site)]">{(search.error as Error).message}</p>
         </div>
       ) : (
-        <main className="grid min-h-0 flex-1 grid-rows-[1fr_1fr] lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:grid-rows-1">
-          <section className="flex min-h-0 flex-col border-foreground/10 lg:border-r">
+        <main className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+          {/* Mobile : une seule vue à la fois, on bascule entre la liste et la carte. */}
+          <div role="tablist" aria-label="Vue" className="flex gap-2 border-b border-foreground/10 px-4 py-2 lg:hidden">
+            {(["liste", "carte"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                role="tab"
+                aria-selected={view === v}
+                onClick={() => setView(v)}
+                className={`h-9 flex-1 rounded-full border text-xs uppercase tracking-widest transition-colors duration-150 ${
+                  view === v ? "border-accent bg-accent text-background" : "border-foreground/15 text-muted"
+                }`}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+          <section className={`min-h-0 flex-1 flex-col border-foreground/10 lg:flex lg:border-r ${view === "carte" ? "hidden" : "flex"}`}>
             <Toolbar
               places={places ?? []}
               filters={filters}
@@ -191,6 +220,15 @@ export function ProspectorApp() {
                   <button
                     type="button"
                     className={BTN}
+                    disabled={refreshing}
+                    onClick={onRefresh}
+                    title={search.data ? `Données OSM ${ago(search.data.fetchedAt)}` : undefined}
+                  >
+                    {refreshing ? "Actualisation…" : "Actualiser OSM"}
+                  </button>
+                  <button
+                    type="button"
+                    className={BTN}
                     disabled={visible.length === 0}
                     onClick={() => downloadText(placesToCsv(visible), `prospects-${city.toLowerCase().replace(/\s+/g, "-")}.csv`)}
                   >
@@ -203,16 +241,14 @@ export function ProspectorApp() {
               <ProspectTable table={table} selectedId={selectedId} onSelect={onSelect} />
             </div>
           </section>
-          <section className="relative min-h-0">
-            <MapPanel places={mapPlaces} selected={selected} onSelect={onSelect} rightInset={selected ? 430 : 0} />
-            <AnimatePresence>
-              {selected && (
-                <PlaceDetail key={selected.id} place={selected} onClose={() => setSelectedId(null)} onUpdated={updatePlace} />
-              )}
-            </AnimatePresence>
+          <section className={`relative isolate min-h-0 flex-1 lg:block ${view === "liste" ? "hidden" : "block"}`}>
+            <MapPanel places={mapPlaces} selected={selected} onSelect={onSelect} rightInset={selected && isDesktop ? 430 : 0} />
           </section>
         </main>
       )}
+      <AnimatePresence>
+        {selected && <PlaceDetail key={selected.id} place={selected} onClose={() => setSelectedId(null)} onUpdated={updatePlace} />}
+      </AnimatePresence>
     </div>
   );
 }

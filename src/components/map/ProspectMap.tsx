@@ -59,12 +59,36 @@ function FitToPlaces({ places }: { places: PlaceDTO[] }) {
 /** Centre la carte sur la sélection, décalée pour ne pas tomber sous le panneau de détail. */
 function FlyToSelected({ selected, rightInset }: { selected: PlaceDTO | null; rightInset: number }) {
   const map = useMap();
-  useEffect(() => {
-    if (!selected) return;
+  const pending = useRef<PlaceDTO | null>(null);
+  const flyTo = (p: PlaceDTO, animate: boolean) => {
     const zoom = Math.max(map.getZoom(), 17);
-    const point = map.project([selected.lat, selected.lon], zoom).add([rightInset / 2, 0]);
-    map.flyTo(map.unproject(point, zoom), zoom, { duration: 0.6 });
+    const point = map.project([p.lat, p.lon], zoom).add([rightInset / 2, 0]);
+    const target = map.unproject(point, zoom);
+    if (animate) map.flyTo(target, zoom, { duration: 0.6 });
+    else map.setView(target, zoom, { animate: false });
+  };
+
+  useEffect(() => {
+    if (!selected) {
+      pending.current = null;
+      return;
+    }
+    // Carte masquée (vue « liste » sur mobile) : sa taille est nulle, on recentre à l'affichage.
+    if (map.getSize().x === 0) pending.current = selected;
+    else flyTo(selected, true);
   }, [selected?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const ro = new ResizeObserver(() => {
+      if (pending.current && map.getSize().x > 0) {
+        const p = pending.current;
+        pending.current = null;
+        flyTo(p, false);
+      }
+    });
+    ro.observe(map.getContainer());
+    return () => ro.disconnect();
+  }, [map]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
 

@@ -76,6 +76,12 @@ export const crm = sqliteTable(
     notes: text("notes").notNull().default(""),
     /** Date de relance au format AAAA-MM-JJ. */
     followUp: text("follow_up"),
+    /** Prix du site en € (devis tant que le client n'a pas signé, montant vendu ensuite). */
+    amount: integer("amount"),
+    /** Abonnement mensuel (hébergement, maintenance…) en €/mois. */
+    monthly: integer("monthly"),
+    /** Date de signature AAAA-MM-JJ, posée automatiquement au passage en « Signé ». */
+    signedOn: text("signed_on"),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   },
   (t) => [index("crm_follow_up_idx").on(t.followUp)],

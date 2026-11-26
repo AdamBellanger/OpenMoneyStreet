@@ -43,7 +43,7 @@ function FollowUpRow({ p, today }: { p: FollowUpDTO; today: string }) {
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-3">
           <Link
-            href={`/?city=${encodeURIComponent(p.cityName)}&place=${encodeURIComponent(p.id)}`}
+            href={`/prospection?city=${encodeURIComponent(p.cityName)}&place=${encodeURIComponent(p.id)}`}
             className="font-display text-2xl transition-colors duration-150 hover:text-accent"
           >
             {p.name}

@@ -264,6 +264,9 @@ export function toPlaceDTO(p: PlaceRow, check: SiteCheckRow | null, c: CrmRow | 
       status: c?.status ?? "a_contacter",
       notes: c?.notes ?? "",
       followUp: c?.followUp ?? null,
+      amount: c?.amount ?? null,
+      monthly: c?.monthly ?? null,
+      signedOn: c?.signedOn ?? null,
       updatedAt: c?.updatedAt.getTime() ?? null,
     },
   };

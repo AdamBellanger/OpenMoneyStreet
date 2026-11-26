@@ -7,7 +7,9 @@ import { duration, ease } from "@/styles/design-tokens";
 
 /** Nom affiché sur le rideau, par chemin. */
 const LABELS: Record<string, string> = {
-  "/": "Carte",
+  "/": "Tableau de bord",
+  "/prospection": "Prospection",
+  "/clients": "Clients",
   "/relances": "Relances du jour",
   "/login": "Connexion",
 };
