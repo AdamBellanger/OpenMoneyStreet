@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useMagnetic } from "@/components/ui/Magnetic";
 import { useCurtainNavigate } from "@/components/layout/PageTransition";
 import { logout } from "@/lib/api-client";
-import { ease } from "@/styles/design-tokens";
+import { ease, spring } from "@/styles/design-tokens";
 
 const LINKS = [
   { href: "/", label: "Tableau de bord" },
@@ -26,6 +26,25 @@ export function AppHeader({ children }: { children?: ReactNode }) {
   const navigate = useCurtainNavigate();
   const magnetic = useMagnetic(0.4);
   const [open, setOpen] = useState(false);
+  const [compact, setCompact] = useState(false);
+  // Les liens du header ne sont affichés qu'à partir de 1280 px (sinon le menu les contient seul).
+  const isWide = useSyncExternalStore(
+    (cb) => {
+      const mq = window.matchMedia("(min-width: 1280px)");
+      mq.addEventListener("change", cb);
+      return () => mq.removeEventListener("change", cb);
+    },
+    () => window.matchMedia("(min-width: 1280px)").matches,
+    () => true,
+  );
+  const toggleVisible = !isWide || compact || open;
+
+  useEffect(() => {
+    const onScroll = () => setCompact(window.scrollY > 80);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
   const toggleRef = useRef<HTMLButtonElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
@@ -64,7 +83,7 @@ export function AppHeader({ children }: { children?: ReactNode }) {
 
   return (
     <>
-      <header className="relative z-30 flex items-center gap-3 border-b border-foreground/10 px-4 py-3 sm:gap-6 sm:px-10">
+      <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-foreground/10 bg-background py-3 pl-4 pr-20 sm:gap-6 sm:pl-10 sm:pr-24 xl:pr-10">
         <Link href="/" className="shrink-0 font-display text-sm tracking-wide">
           <span className="hidden md:inline">
             © Made by Adam Bellanger <span className="text-muted">/ </span>
@@ -74,15 +93,23 @@ export function AppHeader({ children }: { children?: ReactNode }) {
 
         <div className="flex min-w-0 flex-1 items-center gap-4">{children}</div>
 
-        <nav aria-label="Navigation principale" className="hidden shrink-0 items-center gap-7 xl:flex">
-          {LINKS.map((link) => {
+        <nav
+          aria-label="Navigation principale"
+          className={`hidden shrink-0 items-center gap-7 xl:flex ${compact ? "pointer-events-none" : ""}`}
+        >
+          {LINKS.map((link, i) => {
             const active = pathname === link.href;
             return (
               <Link
                 key={link.href}
                 href={link.href}
                 aria-current={active ? "page" : undefined}
-                className="group relative text-sm transition-opacity duration-150 hover:opacity-60"
+                tabIndex={compact ? -1 : undefined}
+                // Comme sur le portfolio : les liens glissent vers le haut l'un après l'autre au scroll.
+                style={{ transitionDelay: `${(compact ? i : LINKS.length - 1 - i) * 50}ms` }}
+                className={`group relative text-sm transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none ${
+                  compact ? "-translate-y-4 opacity-0" : "hover:opacity-60"
+                }`}
               >
                 {link.label}
                 <span
@@ -96,15 +123,27 @@ export function AppHeader({ children }: { children?: ReactNode }) {
           })}
         </nav>
 
+      </header>
+
+      {/* Bouton rond fixe : sur grand écran il n'apparaît (ressort du portfolio) qu'une fois les liens
+          du header partis au scroll ; sur petit écran il est toujours là, le header n'ayant pas de liens. */}
+      <motion.div
+        initial={false}
+        animate={{ scale: toggleVisible ? 1 : 0 }}
+        transition={toggleVisible ? spring.toggle : { duration: 0.25, ease: ease.in }}
+        className={`fixed right-4 top-3 z-50 sm:right-8 ${toggleVisible ? "" : "pointer-events-none"}`}
+      >
         <motion.button
           ref={toggleRef}
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-controls="app-nav-overlay"
+          aria-hidden={toggleVisible ? undefined : true}
+          tabIndex={toggleVisible ? undefined : -1}
           {...magnetic}
-          className={`relative z-50 flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${
-            open ? "bg-accent text-background" : "border border-foreground/20 bg-anthracite/90 text-foreground"
+          className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors duration-200 ${
+            open ? "bg-accent text-background" : "border border-foreground/20 bg-anthracite text-foreground"
           }`}
         >
           <span aria-hidden className="relative block h-2.5 w-5">
@@ -113,7 +152,7 @@ export function AppHeader({ children }: { children?: ReactNode }) {
           </span>
           <span className="sr-only">{open ? "Fermer le menu" : "Ouvrir le menu"}</span>
         </motion.button>
-      </header>
+      </motion.div>
 
       <AnimatePresence>
         {open && (

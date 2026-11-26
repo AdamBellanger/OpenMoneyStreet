@@ -93,7 +93,7 @@ export function PlaceDetail({
       transition={transitions.ui}
       aria-label={`Fiche ${place.name}`}
       style={{ boxShadow: "var(--shadow-float)" }}
-      className="scroll-thin fixed inset-x-2 bottom-2 top-20 z-30 overflow-y-auto rounded-2xl border border-foreground/10 bg-anthracite/95 p-5 backdrop-blur sm:p-6 lg:inset-x-auto lg:bottom-3 lg:right-3 lg:top-[84px] lg:w-[26rem]"
+      className="scroll-thin fixed inset-x-2 bottom-2 top-20 z-30 overflow-y-auto rounded-2xl border border-foreground/10 bg-anthracite/95 p-5 sm:p-6 lg:inset-x-auto lg:bottom-3 lg:right-3 lg:top-[84px] lg:w-[26rem]"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">

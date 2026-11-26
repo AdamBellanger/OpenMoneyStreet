@@ -1,7 +1,7 @@
 "use client";
 
-import { memo, useEffect, useRef } from "react";
-import { CircleMarker, MapContainer, TileLayer, Tooltip, useMap } from "react-leaflet";
+import { useEffect, useRef } from "react";
+import { CircleMarker, MapContainer, TileLayer, useMap } from "react-leaflet";
 import L from "leaflet";
 import { SITE_CLASS_COLORS, type PlaceDTO } from "@/lib/domain";
 import { colors } from "@/styles/design-tokens";
@@ -16,31 +16,76 @@ export interface ProspectMapProps {
 
 const ROUEN: [number, number] = [49.4431, 1.0993];
 
-/** Les marqueurs ne changent qu'avec la liste : la sélection est dessinée à part. */
-const Markers = memo(function Markers({ places, onSelect }: { places: PlaceDTO[]; onSelect: (id: string) => void }) {
-  return (
-    <>
-      {places.map((p) => (
-        <CircleMarker
-          key={p.id}
-          center={[p.lat, p.lon]}
-          radius={5}
-          pathOptions={{
-            color: colors.background,
-            weight: 1,
-            fillColor: SITE_CLASS_COLORS[p.siteClass],
-            fillOpacity: 0.95,
-          }}
-          eventHandlers={{ click: () => onSelect(p.id) }}
-        >
-          <Tooltip direction="top" offset={[0, -6]}>
-            {p.name}
-          </Tooltip>
-        </CircleMarker>
-      ))}
-    </>
-  );
-});
+/**
+ * Tous les commerces dans UNE couche canvas gérée à la main : un composant React par marqueur
+ * (près de 2 000 pour Rouen) rendait chaque filtre et chaque déplacement très lents.
+ * On garde les marqueurs entre deux rendus et on ne touche qu aux différences.
+ */
+function MarkerLayer({ places, onSelect }: { places: PlaceDTO[]; onSelect: (id: string) => void }) {
+  const map = useMap();
+  const group = useRef<L.LayerGroup | null>(null);
+  const markers = useRef(new Map<string, { marker: L.CircleMarker; cls: string }>());
+  const onSelectRef = useRef(onSelect);
+  const tooltip = useRef<L.Tooltip | null>(null);
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+  }, [onSelect]);
+
+  useEffect(() => {
+    const g = L.layerGroup().addTo(map);
+    const known = markers.current;
+    group.current = g;
+    tooltip.current = L.tooltip({ direction: "top", offset: [0, -6] });
+    return () => {
+      g.remove();
+      known.clear();
+      group.current = null;
+    };
+  }, [map]);
+
+  useEffect(() => {
+    const g = group.current;
+    if (!g) return;
+    const known = markers.current;
+    const wanted = new Set(places.map((p) => p.id));
+    for (const [id, entry] of known) {
+      if (!wanted.has(id)) {
+        g.removeLayer(entry.marker);
+        known.delete(id);
+      }
+    }
+    // Pas de renderer dédié : avec preferCanvas, tous les marqueurs (et celui de la sélection) partagent
+    // le canvas de la carte. Un 2e canvas passerait par-dessus et avalerait les clics.
+    for (const p of places) {
+      const entry = known.get(p.id);
+      if (entry) {
+        if (entry.cls !== p.siteClass) {
+          entry.marker.setStyle({ fillColor: SITE_CLASS_COLORS[p.siteClass] });
+          entry.cls = p.siteClass;
+        }
+        continue;
+      }
+      const marker = L.circleMarker([p.lat, p.lon], {
+        radius: 5,
+        color: colors.background,
+        weight: 1,
+        fillColor: SITE_CLASS_COLORS[p.siteClass],
+        fillOpacity: 0.95,
+      });
+      marker.on("click", () => onSelectRef.current(p.id));
+      marker.on("mouseover", () => {
+        const t = tooltip.current;
+        if (t) map.openTooltip(t.setContent(p.name).setLatLng(marker.getLatLng()));
+      });
+      marker.on("mouseout", () => tooltip.current && map.closeTooltip(tooltip.current));
+      g.addLayer(marker);
+      known.set(p.id, { marker, cls: p.siteClass });
+    }
+  }, [places, map]);
+
+  return null;
+}
 
 /** Cadre la carte sur la ville quand la liste change de ville. */
 function FitToPlaces({ places }: { places: PlaceDTO[] }) {
@@ -114,7 +159,7 @@ export default function ProspectMap({ places, selected, onSelect, rightInset }: 
       <AutoResize />
       <FitToPlaces places={places} />
       <FlyToSelected selected={selected} rightInset={rightInset} />
-      <Markers places={places} onSelect={onSelect} />
+      <MarkerLayer places={places} onSelect={onSelect} />
       {selected && (
         <CircleMarker
           key={`sel-${selected.id}-${selected.siteClass}`}

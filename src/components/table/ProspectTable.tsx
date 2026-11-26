@@ -1,9 +1,13 @@
 "use client";
 
-import { memo, useEffect } from "react";
+import { memo, useEffect, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { placeSlug, type PlaceDTO } from "@/lib/domain";
 import { CrmChip, SiteBadge } from "@/components/ui/Status";
 import type { ProspectTable as Table } from "./useProspectTable";
+
+/** Hauteur fixe d une ligne : indispensable à la virtualisation (seules ~30 lignes sont dans le DOM). */
+const ROW_HEIGHT = 57;
 
 const Row = memo(function Row({
   place,
@@ -20,6 +24,7 @@ const Row = memo(function Row({
       data-row
       aria-selected={selected}
       onClick={() => onSelect(place.id)}
+      style={{ height: ROW_HEIGHT }}
       className={`group relative border-b border-foreground/5 transition-colors duration-[120ms] ease-[cubic-bezier(0.16,1,0.3,1)] ${
         selected ? "bg-accent/15" : "hover:bg-foreground/5"
       }`}
@@ -78,14 +83,28 @@ export function ProspectTable({
 }) {
   const rows = table.getRowModel().rows;
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line react-hooks/incompatible-library -- le compilateur React n est pas activé
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 10,
+    scrollPaddingStart: 44,
+  });
+  const items = virtualizer.getVirtualItems();
+  const padTop = items.length > 0 ? items[0].start : 0;
+  const padBottom = items.length > 0 ? virtualizer.getTotalSize() - items[items.length - 1].end : 0;
+
   // Sélection depuis la carte : on amène la ligne dans la zone visible (scroll natif).
   useEffect(() => {
     if (!selectedId) return;
-    document.getElementById(`row-${placeSlug(selectedId)}`)?.scrollIntoView({ block: "nearest" });
-  }, [selectedId]);
+    const index = table.getRowModel().rows.findIndex((r) => r.id === selectedId);
+    if (index >= 0) virtualizer.scrollToIndex(index, { align: "auto" });
+  }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="scroll-thin h-full overflow-auto">
+    <div ref={scrollRef} className="scroll-thin h-full overflow-auto">
       <table className="w-full border-collapse text-left">
         <thead className="sticky top-0 z-10 bg-background">
           {table.getHeaderGroups().map((group) => (
@@ -121,9 +140,20 @@ export function ProspectTable({
           ))}
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <Row key={row.id} place={row.original} selected={row.id === selectedId} onSelect={onSelect} />
-          ))}
+          {padTop > 0 && (
+            <tr aria-hidden style={{ height: padTop }}>
+              <td colSpan={8} />
+            </tr>
+          )}
+          {items.map((v) => {
+            const row = rows[v.index];
+            return <Row key={row.id} place={row.original} selected={row.id === selectedId} onSelect={onSelect} />;
+          })}
+          {padBottom > 0 && (
+            <tr aria-hidden style={{ height: padBottom }}>
+              <td colSpan={8} />
+            </tr>
+          )}
         </tbody>
       </table>
       {rows.length === 0 && (
